@@ -65,6 +65,9 @@ jobs:
           sudo apt-get install -y libgtk-3-dev
           if ! sudo apt-get install -y libwebkit2gtk-4.0-dev; then
             sudo apt-get install -y libwebkit2gtk-4.1-dev
+            multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)"
+            sudo ln -sf /usr/lib/${multiarch}/pkgconfig/webkit2gtk-4.1.pc /usr/lib/${multiarch}/pkgconfig/webkit2gtk-4.0.pc
+            sudo ln -sf /usr/lib/${multiarch}/pkgconfig/javascriptcoregtk-4.1.pc /usr/lib/${multiarch}/pkgconfig/javascriptcoregtk-4.0.pc
           fi
 
       - name: Install frontend dependencies
