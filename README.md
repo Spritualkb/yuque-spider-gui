@@ -236,8 +236,6 @@ MIT License
 
 **Spritualkb**
 
-- Email: 3058886310@qq.com
-
 ---
 
 <div align="center">
