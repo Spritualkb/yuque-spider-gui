@@ -68,6 +68,14 @@ jobs:
             multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)"
             sudo ln -sf /usr/lib/${multiarch}/pkgconfig/webkit2gtk-4.1.pc /usr/lib/${multiarch}/pkgconfig/webkit2gtk-4.0.pc
             sudo ln -sf /usr/lib/${multiarch}/pkgconfig/javascriptcoregtk-4.1.pc /usr/lib/${multiarch}/pkgconfig/javascriptcoregtk-4.0.pc
+            pkgconfig_dir="/usr/lib/${multiarch}/pkgconfig"
+            if [ -d "$pkgconfig_dir" ]; then
+              if [ -n "${PKG_CONFIG_PATH:-}" ]; then
+                echo "PKG_CONFIG_PATH=${pkgconfig_dir}:${PKG_CONFIG_PATH}" >> $GITHUB_ENV
+              else
+                echo "PKG_CONFIG_PATH=${pkgconfig_dir}" >> $GITHUB_ENV
+              fi
+            fi
           fi
 
       - name: Install frontend dependencies
