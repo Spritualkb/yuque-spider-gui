@@ -1,0 +1,160 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            arch: amd64
+            ext: .exe
+            build-args: -platform windows/amd64
+
+          - name: macOS Intel
+            os: macos-latest
+            arch: amd64
+            ext: ''
+            build-args: -platform darwin/amd64
+
+          - name: macOS Apple Silicon
+            os: macos-latest
+            arch: arm64
+            ext: ''
+            build-args: -platform darwin/arm64
+
+          - name: Linux
+            os: ubuntu-latest
+            arch: amd64
+            ext: ''
+            build-args: -platform linux/amd64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build application
+        run: |
+          wails build ${{ matrix.build-args }} -clean
+
+      - name: Create release artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd build/bin
+          $version = "${{ github.ref_name }}"
+          $filename = "yuque-spider-gui-${version}-windows-amd64.zip"
+          Compress-Archive -Path yuque-spider-gui.exe -DestinationPath $filename
+          echo "ARTIFACT_PATH=build/bin/$filename" >> $env:GITHUB_ENV
+          echo "ARTIFACT_NAME=$filename" >> $env:GITHUB_ENV
+
+      - name: Create release artifact (macOS/Linux)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd build/bin
+          version="${{ github.ref_name }}"
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            if [ "${{ matrix.arch }}" == "arm64" ]; then
+              filename="yuque-spider-gui-${version}-darwin-arm64.tar.gz"
+            else
+              filename="yuque-spider-gui-${version}-darwin-amd64.tar.gz"
+            fi
+          else
+            filename="yuque-spider-gui-${version}-linux-amd64.tar.gz"
+          fi
+
+          if [ -f "yuque-spider-gui.app" ]; then
+            tar -czf $filename yuque-spider-gui.app
+          elif [ -d "yuque-spider-gui.app" ]; then
+            tar -czf $filename yuque-spider-gui.app
+          else
+            tar -czf $filename yuque-spider-gui
+          fi
+
+          echo "ARTIFACT_PATH=build/bin/$filename" >> $GITHUB_ENV
+          echo "ARTIFACT_NAME=$filename" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_PATH }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            ## 语雀知识库下载器 ${{ github.ref_name }}
+
+            ### 功能特性
+            - ✨ 支持下载任意语雀知识库为 Markdown 格式
+            - 🖼️ 自动下载并本地化所有图片资源
+            - 🔐 支持使用 Cookie 访问私有知识库
+            - ⚙️ 可配置下载延迟、超时等参数
+            - 📊 实时显示下载进度
+            - 🎨 现代化图形界面,易于使用
+
+            ### 下载说明
+            - **Windows**: 下载 `windows-amd64.zip` 并解压运行
+            - **macOS Intel**: 下载 `darwin-amd64.tar.gz`
+            - **macOS Apple Silicon**: 下载 `darwin-arm64.tar.gz`
+            - **Linux**: 下载 `linux-amd64.tar.gz`
+
+            ### 作者
+            Developed with ❤️ by **Spritualkb**
+
+            基于 [yuque-crawl](https://github.com/burpheart/yuque-crawl) 项目改进
+            使用 [Wails](https://wails.io) 构建
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
